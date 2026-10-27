@@ -1,0 +1,12 @@
+{
+  "name": "cobilt-website",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Waitlist site for Cobilt, the app that helps you start an online business with a pod of founders.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

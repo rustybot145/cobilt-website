@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cobilt | Start an online business, not alone</title>
+  <meta name="description" content="Start an online business from scratch, with a pod of founders by your side. Join the Cobilt waitlist.">
+  <meta name="theme-color" content="#07061A">
+  <link rel="icon" href="/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="preload" as="image" href="/scenes/alone.jpg">
+  <link rel="preload" as="image" href="/scenes/crew.jpg">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="bA" gradientUnits="userSpaceOnUse" x1="52" y1="14" x2="30" y2="56"><stop offset="0" stop-color="#D4DBFF"/><stop offset="1" stop-color="#8C96F8"/></linearGradient>
+      <linearGradient id="bB" gradientUnits="userSpaceOnUse" x1="56" y1="14" x2="46" y2="40"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C9D1FF"/></linearGradient>
+      <linearGradient id="bC" gradientUnits="userSpaceOnUse" x1="60" y1="40" x2="42" y2="84"><stop offset="0" stop-color="#7471F7"/><stop offset="1" stop-color="#4338CA"/></linearGradient>
+      <linearGradient id="bD" gradientUnits="userSpaceOnUse" x1="66" y1="44" x2="44" y2="84"><stop offset="0" stop-color="#3B34B0"/><stop offset="1" stop-color="#211C66"/></linearGradient>
+    </defs>
+    <symbol id="bolt" viewBox="22 10 56 80">
+      <polygon points="58,14 26,56 47,56 53,40" fill="url(#bA)"/>
+      <polygon points="58,14 53,40 41,40" fill="url(#bB)"/>
+      <polygon points="53,40 74,40 40,86 47,56" fill="url(#bC)"/>
+      <polygon points="74,40 40,86 52,56" fill="url(#bD)"/>
+    </symbol>
+  </svg>
+
+  <header class="nav">
+    <a class="wordmark" href="/" aria-label="Cobilt home">
+      <svg class="wordmark-bolt" aria-hidden="true"><use href="#bolt"/></svg>
+      <span>cobilt</span>
+    </a>
+    <button class="btn btn-small" type="button" data-join><span>Join the waitlist</span></button>
+  </header>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero" id="top">
+      <!-- Background film: alone at 2 AM, then the crew. Plays on its own. -->
+      <div class="film" data-film role="img" aria-label="Animation: a founder working alone at 2 AM, then the same founder at a table with a crew of builders.">
+        <div class="scene scene-alone is-on" data-scene="0" aria-hidden="true">
+          <div class="scene-frame" style="--fy:44%">
+            <div class="scene-move">
+              <img src="/scenes/alone.jpg" alt="" width="768" height="1376" fetchpriority="high">
+              <span class="fx fx-screen"></span>
+              <span class="fx fx-moon"></span>
+              <span class="say say-left" style="--x:31%;--y:41.5%;--d:.5s">Anyone else still up?</span>
+              <span class="delivered" style="--x:31%;--y:41.5%;--d:1.3s">Delivered</span>
+            </div>
+          </div>
+        </div>
+        <div class="scene scene-crew" data-scene="1" aria-hidden="true">
+          <div class="scene-frame" style="--fy:48%">
+            <div class="scene-move">
+              <img src="/scenes/crew.jpg" alt="" width="768" height="1376">
+              <span class="fx fx-candle"></span>
+              <span class="say say-right" style="--x:95%;--y:42%;--d:.4s">Up for a 50-min focus?</span>
+              <span class="say say-mid me" style="--x:49%;--y:48%;--d:1.2s">I'm in.</span>
+              <span class="say say-left" style="--x:24%;--y:37%;--d:2s">Same. Starting now.</span>
+            </div>
+          </div>
+        </div>
+        <div class="film-shade"></div>
+      </div>
+
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <h1 class="hero-title">
+            <span class="line"><span>Don't build</span></span>
+            <span class="line"><span>alone.</span></span>
+          </h1>
+          <p class="hero-sub">Start an online business from scratch, with a pod of founders who show up for you every day.</p>
+
+          <button class="btn btn-lg" type="button" data-join><span>Join the waitlist</span></button>
+          <p class="hero-note">Join now. Get 2 months of Bolt AI free.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- From scratch: idea to first sale -->
+    <section class="zero" aria-labelledby="zero-title">
+      <div class="wrap">
+        <h2 id="zero-title">Start from zero.</h2>
+        <p class="section-sub">No idea yet? No experience? Cobilt takes you from nothing to your first sale.</p>
+
+        <ol class="path" data-path>
+          <li class="stop" style="--i:0">
+            <span class="stop-dot" aria-hidden="true"></span>
+            <h3>Pick an idea</h3>
+            <p>Bolt helps you choose what to build.</p>
+          </li>
+          <li class="stop" style="--i:1">
+            <span class="stop-dot" aria-hidden="true"></span>
+            <h3>Build it</h3>
+            <p>Your pod keeps you shipping every week.</p>
+          </li>
+          <li class="stop" style="--i:2">
+            <span class="stop-dot" aria-hidden="true"></span>
+            <h3>Launch</h3>
+            <p>Go live with people in your corner.</p>
+          </li>
+          <li class="stop stop-win" style="--i:3">
+            <span class="stop-dot" aria-hidden="true"><svg><use href="#bolt"/></svg></span>
+            <h3>First sale</h3>
+            <p>Then grow it, together.</p>
+          </li>
+        </ol>
+
+        <ul class="paths" aria-label="Online businesses you can start">
+          <li>Ecom brand</li>
+          <li>Content creator</li>
+          <li>Agency</li>
+          <li>Coaching</li>
+          <li>App or SaaS</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- A week in a pod -->
+    <section class="week" aria-labelledby="week-title">
+      <div class="wrap">
+        <h2 id="week-title">A week in a pod</h2>
+
+        <ol class="week-strip">
+          <li class="day day-mon" data-reveal style="--i:0">
+            <span class="day-label">Monday</span>
+            <h3>Make 3 promises</h3>
+            <p>What you'll ship by Sunday.</p>
+            <ul class="promise-list" aria-label="Example promises">
+              <li>Launch the waitlist page</li>
+              <li>Send 40 cold emails</li>
+              <li>Post 3 reels</li>
+            </ul>
+          </li>
+          <li class="day day-mid" data-reveal style="--i:1">
+            <span class="day-label">Tuesday to Saturday</span>
+            <h3>Meet daily</h3>
+            <p>A 15-minute call with your pod.</p>
+            <div class="ticks" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          </li>
+          <li class="day day-sun" data-reveal style="--i:2">
+            <span class="day-label">Sunday</span>
+            <h3>Show proof</h3>
+            <p>Your pod checks it off.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Bolt finds people -->
+    <section class="find" aria-labelledby="find-title">
+      <div class="wrap find-grid">
+        <div class="find-copy">
+          <h2 id="find-title">Tell Bolt who you need.</h2>
+          <p class="section-sub">Bolt finds the people who fit.</p>
+        </div>
+
+        <div class="chat" data-chat aria-label="Example: searching for a video editor with Bolt">
+          <div class="chat-head">
+            <svg aria-hidden="true"><use href="#bolt"/></svg>
+            <span>Bolt</span>
+          </div>
+          <div class="chat-body">
+            <p class="msg msg-me"><span data-typed>Video editor who gets fitness. Miami or remote.</span><i class="caret" aria-hidden="true"></i></p>
+            <p class="msg msg-bolt">Found 3 people who fit.</p>
+            <ul class="results">
+              <li><span class="avatar sm" style="--c:#A5B4FC;--t:#07061A">J</span><span class="r-name">Jaylen<small>Edits for 3 fitness channels</small></span><b>94%</b></li>
+              <li><span class="avatar sm" style="--c:#E8DCC6;--t:#07061A">S</span><span class="r-name">Sofia<small>Reels editor, Miami</small></span><b>88%</b></li>
+              <li><span class="avatar sm" style="--c:#2A2670;--t:#E8E6FF">K</span><span class="r-name">Kai<small>Shoots gym brand ads</small></span><b>81%</b></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="cta" aria-labelledby="cta-title">
+      <div class="wrap cta-inner">
+        <svg class="cta-bolt" aria-hidden="true"><use href="#bolt"/></svg>
+        <h2 id="cta-title">Your pod is waiting.</h2>
+        <button class="btn btn-lg" type="button" data-join><span>Join the waitlist</span></button>
+        <p class="cta-note">Free to join. 2 months of Bolt AI on us.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <a class="wordmark wordmark-sm" href="#top" aria-label="Back to top">
+        <svg class="wordmark-bolt" aria-hidden="true"><use href="#bolt"/></svg>
+        <span>cobilt</span>
+      </a>
+      <p>© 2026 Cobilt</p>
+    </div>
+  </footer>
+
+  <!-- Waitlist quiz: email, name, where you're from -->
+  <dialog class="join" id="join-dialog" aria-labelledby="join-title">
+    <form class="join-card" method="dialog" novalidate>
+      <div class="join-top">
+        <button class="join-back" type="button" data-back aria-label="Back" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <div class="join-steps" aria-hidden="true"><i></i><i></i><i></i></div>
+        <button class="join-close" type="button" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+
+      <h2 class="sr-only" id="join-title">Join the Cobilt waitlist</h2>
+
+      <div class="join-body">
+        <section class="step" data-step="0">
+          <label class="step-q" for="join-email">What's your email?</label>
+          <p class="step-hint">We'll email you when you're in.</p>
+          <input class="step-input" id="join-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@yourbrand.com" required>
+        </section>
+        <section class="step" data-step="1" hidden>
+          <label class="step-q" for="join-name">What's your name?</label>
+          <p class="step-hint">So your pod knows you.</p>
+          <input class="step-input" id="join-name" name="name" type="text" autocomplete="name" autocapitalize="words" placeholder="First and last name" maxlength="80" required>
+        </section>
+        <section class="step" data-step="2" hidden>
+          <label class="step-q" for="join-where">Where are you from?</label>
+          <p class="step-hint">We open city by city.</p>
+          <input class="step-input" id="join-where" name="location" type="text" autocomplete="address-level2" autocapitalize="words" placeholder="City, country" maxlength="100" required>
+        </section>
+        <section class="step step-done" data-step="3" hidden>
+          <svg class="done-check" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 27l7.5 7.5L37 19"/></svg>
+          <p class="step-q" data-done-title>Joined.</p>
+          <p class="step-hint" data-done-body></p>
+          <div class="perk">
+            <svg aria-hidden="true"><use href="#bolt"/></svg>
+            <p><strong>2 months of Bolt AI, free</strong><span>Sign up with <b data-done-email></b> to use it.</span></p>
+          </div>
+        </section>
+        <p class="join-msg" role="alert"></p>
+      </div>
+
+      <button class="btn btn-lg join-next" type="submit"><span>Continue</span></button>
+    </form>
+  </dialog>
+
+  <script src="/main.js"></script>
+</body>
+</html>

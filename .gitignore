@@ -1,0 +1,7 @@
+# Waitlist signups are real people's emails, names and locations. Never commit them.
+data/
+
+.DS_Store
+*.tmp
+node_modules/
+.env*
