@@ -228,8 +228,12 @@
         </section>
         <section class="step" data-step="2" hidden>
           <label class="step-q" for="join-where">Where are you from?</label>
-          <p class="step-hint">We open city by city.</p>
-          <input class="step-input" id="join-where" name="location" type="text" autocomplete="address-level2" autocapitalize="words" placeholder="City, country" maxlength="100" required>
+          <p class="step-hint">We open country by country.</p>
+          <div class="select-wrap">
+            <select class="step-input" id="join-where" name="location" autocomplete="country-name" required>
+              <option value="" disabled selected>Choose your country</option>
+            </select>
+          </div>
         </section>
         <section class="step step-check" data-step="3" hidden>
           <svg class="done-check mail" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 19h22v15H15z M15 20l11 8 11-8"/></svg>

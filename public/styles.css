@@ -194,6 +194,15 @@ a { color: inherit; }
 .step-input::placeholder { color: rgba(244, 243, 255, 0.34); }
 .step-input:focus { border-color: var(--glow); background: rgba(244, 243, 255, 0.08); }
 .step-input.bad { border-color: #FCA5A5; animation: shake .4s ease; }
+.select-wrap { position: relative; }
+.select-wrap::after {
+  content: ""; position: absolute; right: 20px; top: 50%; width: 9px; height: 9px; pointer-events: none;
+  border-right: 2px solid var(--glow); border-bottom: 2px solid var(--glow);
+  transform: translateY(-70%) rotate(45deg);
+}
+select.step-input { appearance: none; -webkit-appearance: none; padding-right: 48px; cursor: pointer; }
+select.step-input:invalid { color: rgba(244, 243, 255, 0.34); }
+select.step-input option { background: var(--deep); color: var(--paper); }
 .join-msg { grid-area: 2 / 1; min-height: 22px; margin-top: 10px; font-size: 14px; color: #FCA5A5; }
 .join-next { width: 100%; margin-top: 16px; }
 

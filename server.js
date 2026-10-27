@@ -38,6 +38,7 @@ const TYPES = {
   '.js': 'text/javascript; charset=utf-8',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.json': 'application/json',
 };
 
 const SECURITY_HEADERS = {
@@ -56,6 +57,7 @@ const SECURITY_HEADERS = {
 };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const COUNTRIES = new Set(JSON.parse(fs.readFileSync(path.join(PUBLIC, 'countries.json'), 'utf8')).map(([, name]) => name));
 const TOKEN = /^[A-Za-z0-9_-]{43}$/; // 32 random bytes, base64url
 
 /* ---------- Tokens ---------- */
@@ -249,7 +251,7 @@ async function joinWaitlist(req, res) {
 
   if (!EMAIL.test(email)) return send(res, 400, { error: 'Enter an email like name@domain.com.' });
   if (name.length < 2) return send(res, 400, { error: 'Enter your name.' });
-  if (location.length < 2) return send(res, 400, { error: 'Enter your city or country.' });
+  if (!COUNTRIES.has(location)) return send(res, 400, { error: 'Choose your country.' });
 
   const token = newToken();
   const result = await store.start({ email, name, location, tokenHash: hashToken(token) });

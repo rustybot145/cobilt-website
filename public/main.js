@@ -107,7 +107,7 @@
   const checks = [
     (v) => EMAIL.test(v) || 'Enter an email like name@domain.com.',
     (v) => v.length >= 2 || 'Enter your name.',
-    (v) => v.length >= 2 || 'Enter your city or country.',
+    (v) => v.length >= 2 || 'Choose your country.',
   ];
 
   const LABELS = { [QUESTIONS - 1]: 'Join the waitlist', [CHECK]: 'Got it', [DONE]: 'Done' };
@@ -137,7 +137,7 @@
     back.hidden = to === 0 || to >= CHECK;
     next.firstElementChild.textContent = LABELS[to] || 'Continue';
     msg.textContent = '';
-    const input = steps[to].querySelector('input');
+    const input = steps[to].querySelector('.step-input');
     if (input) setTimeout(() => input.focus({ preventScroll: true }), 60);
   }
 
@@ -173,6 +173,14 @@
   back.addEventListener('click', () => go(step - 1, 'back'));
   dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
   dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); });
+  // Country list, with the visitor's own country picked when the browser knows it
+  const countrySelect = dialog.querySelector('#join-where');
+  fetch('/countries.json').then((r) => r.json()).then((countries) => {
+    let region = '';
+    try { region = new Intl.Locale(navigator.language).maximize().region || ''; } catch {}
+    countrySelect.append(...countries.map(([code, name]) => new Option(name, name, false, code === region)));
+  }).catch(() => {});
+
   dialog.querySelectorAll('.step-input').forEach((el) => el.addEventListener('input', () => {
     el.classList.remove('bad'); msg.textContent = '';
   }));
@@ -198,7 +206,7 @@
     e.preventDefault();
     if (step >= CHECK) return close();
 
-    const input = steps[step].querySelector('input');
+    const input = steps[step].querySelector('.step-input');
     const ok = checks[step](input.value.trim());
     if (ok !== true) {
       msg.textContent = ok;
