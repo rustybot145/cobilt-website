@@ -197,7 +197,14 @@ a { color: inherit; }
 .join-msg { grid-area: 2 / 1; min-height: 22px; margin-top: 10px; font-size: 14px; color: #FCA5A5; }
 .join-next { width: 100%; margin-top: 16px; }
 
-.step-done { text-align: left; }
+.step-done, .step-check { text-align: left; }
+.step-hint b { color: var(--paper); font-weight: 600; word-break: break-all; }
+.step-small { font-size: 14px; color: rgba(244, 243, 255, 0.55); }
+.link-btn {
+  appearance: none; border: 0; padding: 0; background: none; cursor: pointer;
+  font: inherit; color: var(--glow); text-decoration: underline; text-underline-offset: 3px;
+}
+.done-check.mail path { stroke-width: 2.6; stroke-dasharray: 90; stroke-dashoffset: 90; animation-duration: .7s; }
 .done-check { width: 56px; height: 56px; margin-bottom: 18px; }
 .done-check circle { fill: var(--indigo); transform-origin: center; animation: pop-circle .5s var(--ease-spring); }
 .done-check path { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 34; stroke-dashoffset: 34; animation: draw .45s var(--ease-out) .25s forwards; }

@@ -4,4 +4,6 @@ data/
 .DS_Store
 *.tmp
 node_modules/
-.env*
+.env
+.env.*
+!.env.example

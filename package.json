@@ -4,9 +4,9 @@
   "private": true,
   "description": "Waitlist site for Cobilt, the app that helps you start an online business with a pod of founders.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --env-file-if-exists=.env server.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.9"
   }
 }

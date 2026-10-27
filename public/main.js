@@ -87,7 +87,7 @@
     chat.classList.add('typed', 'answered');
   });
 
-  /* Waitlist quiz: email, then name, then where you're from */
+  /* Waitlist quiz: email, name, where you're from → check your email → joined */
   const dialog = document.getElementById('join-dialog');
   const joinButtons = [...document.querySelectorAll('[data-join]')];
   const card = dialog.querySelector('.join-card');
@@ -98,6 +98,9 @@
   const msg = dialog.querySelector('.join-msg');
   const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const STORE = 'cobilt-waitlist';
+  const QUESTIONS = 3;
+  const CHECK = 3;
+  const DONE = 4;
   let step = 0;
   let joined = null;
 
@@ -106,6 +109,8 @@
     (v) => v.length >= 2 || 'Enter your name.',
     (v) => v.length >= 2 || 'Enter your city or country.',
   ];
+
+  const LABELS = { [QUESTIONS - 1]: 'Join the waitlist', [CHECK]: 'Got it', [DONE]: 'Done' };
 
   function markJoined() {
     joinButtons.forEach((b) => {
@@ -127,29 +132,33 @@
     });
     if (step !== to) { void steps[to].offsetWidth; steps[to].classList.add(dir); }
     step = to;
-    const done = to === steps.length - 1;
-    dialog.classList.toggle('done', done);
-    dots.forEach((d, i) => d.classList.toggle('on', done || i <= to));
-    back.hidden = to === 0 || done;
-    next.firstElementChild.textContent = done ? 'Done' : to === 2 ? 'Join the waitlist' : 'Continue';
+    dialog.classList.toggle('done', to === DONE);
+    dots.forEach((d, i) => d.classList.toggle('on', i <= to));
+    back.hidden = to === 0 || to >= CHECK;
+    next.firstElementChild.textContent = LABELS[to] || 'Continue';
     msg.textContent = '';
     const input = steps[to].querySelector('input');
     if (input) setTimeout(() => input.focus({ preventScroll: true }), 60);
   }
 
-  function showDone({ name, email, position, preview }) {
+  function showDone({ name, email, position }) {
     const first = name.split(/\s+/)[0];
     dialog.querySelector('[data-done-title]').textContent = `Joined. Welcome, ${first}.`;
-    dialog.querySelector('[data-done-body]').textContent = preview
-      ? "This is a preview, so nothing was saved."
-      : `You're #${position} on the list.`;
+    dialog.querySelector('[data-done-body]').textContent = `You're #${position} on the list.`;
     dialog.querySelector('[data-done-email]').textContent = email;
-    go(3);
+    go(DONE);
+  }
+
+  function rememberJoined(data) {
+    joined = data;
+    try { localStorage.setItem(STORE, JSON.stringify(joined)); } catch {}
+    markJoined();
+    showDone(joined);
   }
 
   function open() {
     if (joined) showDone(joined); else go(0);
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
   }
 
   function close() {
@@ -160,6 +169,7 @@
 
   joinButtons.forEach((b) => b.addEventListener('click', open));
   dialog.querySelector('[data-close]').addEventListener('click', close);
+  dialog.querySelector('[data-restart]').addEventListener('click', () => go(0, 'back'));
   back.addEventListener('click', () => go(step - 1, 'back'));
   dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
   dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); });
@@ -167,10 +177,10 @@
     el.classList.remove('bad'); msg.textContent = '';
   }));
 
-  async function save(body) {
-    // Hosted preview has no server: pretend it worked and say so
-    if (window.COBILT_PREVIEW) return { position: 1, preview: true };
-    const res = await fetch('/api/waitlist', {
+  async function post(url, body) {
+    // Hosted preview has no server: act like the email went out
+    if (window.COBILT_PREVIEW) return { status: 'pending' };
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -180,19 +190,22 @@
     return data;
   }
 
+  const errorText = (err) => err.message === 'Failed to fetch'
+    ? "Couldn't reach the server. Check your connection and try again."
+    : err.message;
+
   card.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (step === 3) return close();
+    if (step >= CHECK) return close();
 
     const input = steps[step].querySelector('input');
-    const value = input.value.trim();
-    const ok = checks[step](value);
+    const ok = checks[step](input.value.trim());
     if (ok !== true) {
       msg.textContent = ok;
       input.classList.remove('bad'); void input.offsetWidth; input.classList.add('bad');
       return input.focus();
     }
-    if (step < 2) return go(step + 1);
+    if (step < QUESTIONS - 1) return go(step + 1);
 
     const body = {
       email: card.email.value.trim(),
@@ -202,16 +215,31 @@
     next.setAttribute('aria-busy', 'true');
     next.firstElementChild.textContent = 'Joining…';
     try {
-      const { position, preview } = await save(body);
-      joined = { ...body, position, preview };
-      if (!preview) { try { localStorage.setItem(STORE, JSON.stringify(joined)); } catch {} }
-      markJoined();
-      showDone(joined);
+      const result = await post('/api/waitlist', body);
+      if (result.status === 'confirmed') {
+        rememberJoined({ name: body.name, email: body.email, position: result.position });
+      } else {
+        dialog.querySelector('[data-check-email]').textContent = body.email;
+        go(CHECK);
+      }
     } catch (err) {
-      next.firstElementChild.textContent = 'Join the waitlist';
-      msg.textContent = err.message === 'Failed to fetch' ? "Couldn't reach the server. Check your connection and try again." : err.message;
+      next.firstElementChild.textContent = LABELS[QUESTIONS - 1];
+      msg.textContent = errorText(err);
     } finally {
       next.removeAttribute('aria-busy');
     }
   });
+
+  // Arriving from the confirm link in the email: /?confirm=<token>
+  const token = new URLSearchParams(location.search).get('confirm');
+  if (token) {
+    history.replaceState(null, '', location.pathname + location.hash);
+    post('/api/waitlist/confirm', { token })
+      .then((data) => { rememberJoined(data); open(); })
+      .catch((err) => {
+        open();
+        go(0);
+        msg.textContent = errorText(err);
+      });
+  }
 })();
