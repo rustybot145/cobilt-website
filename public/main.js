@@ -87,7 +87,7 @@
     chat.classList.add('typed', 'answered');
   });
 
-  /* Waitlist quiz: email, name, where you're from → check your email → joined */
+  /* Waitlist quiz: email, name, country → 6-digit email code → joined */
   const dialog = document.getElementById('join-dialog');
   const joinButtons = [...document.querySelectorAll('[data-join]')];
   const card = dialog.querySelector('.join-card');
@@ -96,21 +96,28 @@
   const back = dialog.querySelector('[data-back]');
   const next = dialog.querySelector('.join-next');
   const msg = dialog.querySelector('.join-msg');
+  const codeInput = dialog.querySelector('#join-code');
+  const resendBtn = dialog.querySelector('[data-resend]');
   const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   const STORE = 'cobilt-waitlist';
-  const QUESTIONS = 3;
-  const CHECK = 3;
+  const QUESTIONS = 3; // email, name, country
+  const CODE = 3;
   const DONE = 4;
+  const RESEND_SECONDS = 60;
   let step = 0;
   let joined = null;
+  let signup = null; // { email, name, location } waiting for its code
+  let resendTimer = null;
 
   const checks = [
     (v) => EMAIL.test(v) || 'Enter an email like name@domain.com.',
     (v) => v.length >= 2 || 'Enter your name.',
     (v) => v.length >= 2 || 'Choose your country.',
+    (v) => /^\d{6}$/.test(v) || 'Enter the 6-digit code.',
   ];
 
-  const LABELS = { [QUESTIONS - 1]: 'Join the waitlist', [CHECK]: 'Got it', [DONE]: 'Done' };
+  const LABELS = { [QUESTIONS - 1]: 'Join the waitlist', [CODE]: 'Confirm', [DONE]: 'Done' };
+  const BUSY = { [QUESTIONS - 1]: 'Sending code…', [CODE]: 'Checking…' };
 
   function markJoined() {
     joinButtons.forEach((b) => {
@@ -134,7 +141,7 @@
     step = to;
     dialog.classList.toggle('done', to === DONE);
     dots.forEach((d, i) => d.classList.toggle('on', i <= to));
-    back.hidden = to === 0 || to >= CHECK;
+    back.hidden = to === 0 || to >= CODE;
     next.firstElementChild.textContent = LABELS[to] || 'Continue';
     msg.textContent = '';
     const input = steps[to].querySelector('.step-input');
@@ -156,8 +163,20 @@
     showDone(joined);
   }
 
+  function startResendTimer() {
+    clearInterval(resendTimer);
+    let left = RESEND_SECONDS;
+    const tick = () => {
+      resendBtn.disabled = left > 0;
+      resendBtn.textContent = left > 0 ? `Resend code in ${left}s` : 'Resend code';
+      if (left-- <= 0) clearInterval(resendTimer);
+    };
+    tick();
+    resendTimer = setInterval(tick, 1000);
+  }
+
   function open() {
-    if (joined) showDone(joined); else go(0);
+    if (joined) showDone(joined); else if (signup) go(CODE); else go(0);
     if (!dialog.open) dialog.showModal();
   }
 
@@ -167,27 +186,11 @@
     setTimeout(() => { dialog.classList.remove('closing'); dialog.close(); }, reduced ? 0 : 240);
   }
 
-  joinButtons.forEach((b) => b.addEventListener('click', open));
-  dialog.querySelector('[data-close]').addEventListener('click', close);
-  dialog.querySelector('[data-restart]').addEventListener('click', () => go(0, 'back'));
-  back.addEventListener('click', () => go(step - 1, 'back'));
-  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
-  dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); });
-  // Country list, with the visitor's own country picked when the browser knows it
-  const countrySelect = dialog.querySelector('#join-where');
-  fetch('/countries.json').then((r) => r.json()).then((countries) => {
-    let region = '';
-    try { region = new Intl.Locale(navigator.language).maximize().region || ''; } catch {}
-    countrySelect.append(...countries.map(([code, name]) => new Option(name, name, false, code === region)));
-  }).catch(() => {});
-
-  dialog.querySelectorAll('.step-input').forEach((el) => el.addEventListener('input', () => {
-    el.classList.remove('bad'); msg.textContent = '';
-  }));
-
   async function post(url, body) {
-    // Hosted preview has no server: act like the email went out
-    if (window.COBILT_PREVIEW) return { status: 'pending' };
+    // Hosted preview has no server: accept any 6-digit code
+    if (window.COBILT_PREVIEW) {
+      return url.endsWith('/verify') ? { name: signup.name, email: signup.email, position: 1 } : { status: 'pending' };
+    }
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -202,52 +205,102 @@
     ? "Couldn't reach the server. Check your connection and try again."
     : err.message;
 
-  card.addEventListener('submit', async (e) => {
+  function showError(input, text) {
+    msg.textContent = text;
+    input.classList.remove('bad'); void input.offsetWidth; input.classList.add('bad');
+    input.focus();
+  }
+
+  // Ask for a code. Returns true once we're waiting on one.
+  async function requestCode() {
+    const result = await post('/api/waitlist', signup);
+    if (result.status === 'confirmed') {
+      rememberJoined({ name: signup.name, email: signup.email, position: result.position });
+      signup = null;
+      return false;
+    }
+    startResendTimer();
+    return true;
+  }
+
+  async function busy(task) {
+    next.setAttribute('aria-busy', 'true');
+    next.firstElementChild.textContent = BUSY[step] || 'One sec…';
+    const at = step;
+    try { await task(); } catch (err) {
+      showError(steps[step].querySelector('.step-input') || next, errorText(err));
+    } finally {
+      next.removeAttribute('aria-busy');
+      if (step === at) next.firstElementChild.textContent = LABELS[step] || 'Continue';
+    }
+  }
+
+  joinButtons.forEach((b) => b.addEventListener('click', open));
+  dialog.querySelector('[data-close]').addEventListener('click', close);
+  back.addEventListener('click', () => go(step - 1, 'back'));
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); });
+  dialog.querySelectorAll('.step-input').forEach((el) => el.addEventListener('input', () => {
+    el.classList.remove('bad'); msg.textContent = '';
+  }));
+
+  dialog.querySelector('[data-restart]').addEventListener('click', () => {
+    signup = null;
+    codeInput.value = '';
+    go(0, 'back');
+  });
+
+  resendBtn.addEventListener('click', () => busy(async () => {
+    codeInput.value = '';
+    if (await requestCode()) { msg.textContent = 'New code sent.'; codeInput.focus(); }
+  }));
+
+  // Digits only; submit as soon as all 6 are in (typed, pasted or autofilled)
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, 6);
+    if (codeInput.value.length === 6 && !next.hasAttribute('aria-busy')) card.requestSubmit();
+  });
+
+  // Country list, with the visitor's own country picked when the browser knows it
+  const countrySelect = dialog.querySelector('#join-where');
+  fetch('/countries.json').then((r) => r.json()).then((countries) => {
+    let region = '';
+    try { region = new Intl.Locale(navigator.language).maximize().region || ''; } catch {}
+    countrySelect.append(...countries.map(([code, name]) => new Option(name, name, false, code === region)));
+  }).catch(() => {});
+
+  card.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (step >= CHECK) return close();
+    if (step === DONE) return close();
+    if (next.hasAttribute('aria-busy')) return;
 
     const input = steps[step].querySelector('.step-input');
     const ok = checks[step](input.value.trim());
-    if (ok !== true) {
-      msg.textContent = ok;
-      input.classList.remove('bad'); void input.offsetWidth; input.classList.add('bad');
-      return input.focus();
-    }
+    if (ok !== true) return showError(input, ok);
+
     if (step < QUESTIONS - 1) return go(step + 1);
 
-    const body = {
-      email: card.email.value.trim(),
-      name: card.name.value.trim(),
-      location: card.location.value.trim(),
-    };
-    next.setAttribute('aria-busy', 'true');
-    next.firstElementChild.textContent = 'Joining…';
-    try {
-      const result = await post('/api/waitlist', body);
-      if (result.status === 'confirmed') {
-        rememberJoined({ name: body.name, email: body.email, position: result.position });
-      } else {
-        dialog.querySelector('[data-check-email]').textContent = body.email;
-        go(CHECK);
-      }
-    } catch (err) {
-      next.firstElementChild.textContent = LABELS[QUESTIONS - 1];
-      msg.textContent = errorText(err);
-    } finally {
-      next.removeAttribute('aria-busy');
-    }
-  });
-
-  // Arriving from the confirm link in the email: /?confirm=<token>
-  const token = new URLSearchParams(location.search).get('confirm');
-  if (token) {
-    history.replaceState(null, '', location.pathname + location.hash);
-    post('/api/waitlist/confirm', { token })
-      .then((data) => { rememberJoined(data); open(); })
-      .catch((err) => {
-        open();
-        go(0);
-        msg.textContent = errorText(err);
+    if (step === QUESTIONS - 1) {
+      signup = {
+        email: card.email.value.trim(),
+        name: card.name.value.trim(),
+        location: card.location.value,
+      };
+      return busy(async () => {
+        if (await requestCode()) {
+          dialog.querySelector('[data-check-email]').textContent = signup.email;
+          codeInput.value = '';
+          go(CODE);
+        }
       });
-  }
+    }
+
+    // step === CODE
+    busy(async () => {
+      const data = await post('/api/waitlist/verify', { email: signup.email, code: codeInput.value });
+      signup = null;
+      clearInterval(resendTimer);
+      rememberJoined(data);
+    }).then(() => { if (step === CODE) codeInput.select(); });
+  });
 })();

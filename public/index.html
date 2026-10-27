@@ -236,10 +236,14 @@
           </div>
         </section>
         <section class="step step-check" data-step="3" hidden>
-          <svg class="done-check mail" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 19h22v15H15z M15 20l11 8 11-8"/></svg>
-          <p class="step-q">Check your email</p>
-          <p class="step-hint">We sent a link to <b data-check-email></b>. Tap it to confirm your spot.</p>
-          <p class="step-small">Not there? Check spam, or <button class="link-btn" type="button" data-restart>use a different email</button>.</p>
+          <label class="step-q" for="join-code">Enter your code</label>
+          <p class="step-hint">We sent a 6-digit code to <b data-check-email></b>.</p>
+          <input class="step-input code-input" id="join-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000000" required>
+          <p class="step-small code-links">
+            <button class="link-btn" type="button" data-resend>Resend code</button>
+            <span aria-hidden="true">or</span>
+            <button class="link-btn" type="button" data-restart>use a different email</button>
+          </p>
         </section>
         <section class="step step-done" data-step="4" hidden>
           <svg class="done-check" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/><path d="M15 27l7.5 7.5L37 19"/></svg>

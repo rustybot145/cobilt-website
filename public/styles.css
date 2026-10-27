@@ -213,7 +213,13 @@ select.step-input option { background: var(--deep); color: var(--paper); }
   appearance: none; border: 0; padding: 0; background: none; cursor: pointer;
   font: inherit; color: var(--glow); text-decoration: underline; text-underline-offset: 3px;
 }
-.done-check.mail path { stroke-width: 2.6; stroke-dasharray: 90; stroke-dashoffset: 90; animation-duration: .7s; }
+.code-input {
+  text-align: center; font-size: 28px; font-weight: 700; letter-spacing: 0.5em; padding-left: calc(18px + 0.5em);
+  font-variant-numeric: tabular-nums;
+}
+.code-input::placeholder { color: rgba(244, 243, 255, 0.18); }
+.code-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.link-btn:disabled { color: rgba(244, 243, 255, 0.4); text-decoration: none; cursor: default; }
 .done-check { width: 56px; height: 56px; margin-bottom: 18px; }
 .done-check circle { fill: var(--indigo); transform-origin: center; animation: pop-circle .5s var(--ease-spring); }
 .done-check path { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 34; stroke-dashoffset: 34; animation: draw .45s var(--ease-out) .25s forwards; }

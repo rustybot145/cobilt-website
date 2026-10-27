@@ -1,11 +1,11 @@
-// Cobilt website: serves /public and runs the waitlist with email confirmation.
+// Cobilt website: serves /public and runs the waitlist with a 6-digit email code.
 //
-//   POST /api/waitlist          { email, name, location } → saves as pending, emails a confirm link
-//   POST /api/waitlist/confirm  { token }                 → confirms, returns { name, email, position }
+//   POST /api/waitlist         { email, name, location } → saves as pending, emails a code
+//   POST /api/waitlist/verify  { email, code }           → confirms, returns { name, position }
 //
 // Storage: Supabase when SUPABASE_URL + SUPABASE_KEY are set (see supabase/waitlist.sql),
 // otherwise data/waitlist.json for local testing.
-// Email: Resend when RESEND_API_KEY is set, otherwise the confirm link is printed to the console.
+// Email: Resend when RESEND_API_KEY is set, otherwise the code is printed to the console.
 // No dependencies. Run: npm start   (settings in .env, see .env.example)
 const http = require('http');
 const fs = require('fs');
@@ -16,7 +16,6 @@ const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT) || 4321;
 const HOST = process.env.HOST || '127.0.0.1';
-const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const PUBLIC = path.join(__dirname, 'public');
 const DATA = path.join(__dirname, 'data', 'waitlist.json');
 
@@ -26,9 +25,10 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'Cobilt <hello@getcobilt.app>';
 
 const MAX_BODY = 10_000; // bytes
-const RATE_LIMIT = { max: 10, windowMs: 10 * 60 * 1000 }; // API calls per IP
-const LINK_HOURS = 24; // confirm links expire after this
-const RESEND_AFTER_MS = 60 * 1000; // at most one confirm email per address per minute
+const RATE_LIMIT = { max: 20, windowMs: 10 * 60 * 1000 }; // API calls per IP
+const CODE_MINUTES = 10; // codes expire after this
+const MAX_TRIES = 5; // wrong codes allowed before a new one is needed
+const RESEND_AFTER_MS = 60 * 1000; // at most one code email per address per minute
 const PENDING_DAYS = 7; // unconfirmed signups are deleted after this
 const PERK_MONTHS = 2; // free months of Bolt AI promised to confirmed members
 
@@ -43,7 +43,7 @@ const TYPES = {
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'no-referrer', // confirm tokens sit in the URL; never leak them to other sites
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Frame-Options': 'DENY',
   'Content-Security-Policy': [
     "default-src 'self'",
@@ -57,13 +57,14 @@ const SECURITY_HEADERS = {
 };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const CODE = /^\d{6}$/;
 const COUNTRIES = new Set(JSON.parse(fs.readFileSync(path.join(PUBLIC, 'countries.json'), 'utf8')).map(([, name]) => name));
-const TOKEN = /^[A-Za-z0-9_-]{43}$/; // 32 random bytes, base64url
 
-/* ---------- Tokens ---------- */
+/* ---------- Codes ---------- */
 
-const newToken = () => crypto.randomBytes(32).toString('base64url');
-const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+const newCode = () => String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+// Tied to the email so the same code for two people never hashes the same.
+const hashCode = (email, code) => crypto.createHash('sha256').update(`${email}:${code}`).digest('hex');
 
 /* ---------- Storage: Supabase ---------- */
 
@@ -82,13 +83,13 @@ async function rpc(fn, args) {
 
 const supabaseStore = {
   label: () => `Supabase (${new URL(SUPABASE_URL).host})`,
-  async start({ email, name, location, tokenHash }) {
-    const [row] = await rpc('join_waitlist', { p_email: email, p_name: name, p_location: location, p_token_hash: tokenHash });
+  async start({ email, name, location, codeHash }) {
+    const [row] = await rpc('join_waitlist', { p_email: email, p_name: name, p_location: location, p_code_hash: codeHash });
     return { status: row.status, position: row.spot == null ? null : Number(row.spot), sendEmail: row.send_email };
   },
-  async confirm(tokenHash) {
-    const [row] = await rpc('confirm_waitlist', { p_token_hash: tokenHash });
-    return row ? { name: row.joined_name, email: row.joined_email, position: Number(row.spot) } : null;
+  async verify(email, codeHash) {
+    const [row] = await rpc('verify_waitlist', { p_email: email, p_code_hash: codeHash });
+    return { result: row.result, name: row.joined_name, position: row.spot == null ? null : Number(row.spot), triesLeft: row.tries_left };
   },
 };
 
@@ -107,13 +108,11 @@ function saveFile(list) {
 }
 
 // Spot in line among confirmed signups, ordered by when they confirmed.
-function spotIn(list, entry) {
-  return list.filter((e) => e.confirmedAt && e.confirmedAt <= entry.confirmedAt).length;
-}
+const spotIn = (list, entry) => list.filter((e) => e.confirmedAt && e.confirmedAt <= entry.confirmedAt).length;
 
 const fileStore = {
   label: () => 'data/waitlist.json (local)',
-  async start({ email, name, location, tokenHash }) {
+  async start({ email, name, location, codeHash }) {
     const now = Date.now();
     const list = loadFile().filter((e) => e.confirmedAt || now - Date.parse(e.joinedAt) < PENDING_DAYS * 864e5);
     let entry = list.find((e) => e.email === email);
@@ -132,19 +131,30 @@ const fileStore = {
       list.push(entry);
     }
     Object.assign(entry, {
-      name, location, tokenHash,
-      tokenExpiresAt: new Date(now + LINK_HOURS * 36e5).toISOString(),
+      name, location, codeHash, codeAttempts: 0,
+      codeExpiresAt: new Date(now + CODE_MINUTES * 6e4).toISOString(),
       emailSentAt: new Date(now).toISOString(),
     });
     saveFile(list);
     return { status: 'pending', position: null, sendEmail: true };
   },
-  async confirm(tokenHash) {
+  async verify(email, codeHash) {
     const list = loadFile();
-    const entry = list.find((e) => e.tokenHash === tokenHash && Date.parse(e.tokenExpiresAt) > Date.now());
-    if (!entry) return null;
-    if (!entry.confirmedAt) { entry.confirmedAt = new Date().toISOString(); saveFile(list); }
-    return { name: entry.name, email: entry.email, position: spotIn(list, entry) };
+    const entry = list.find((e) => e.email === email);
+    if (!entry) return { result: 'expired' };
+    if (!entry.confirmedAt) {
+      if (!entry.codeHash || Date.parse(entry.codeExpiresAt) <= Date.now() || entry.codeAttempts >= MAX_TRIES) {
+        return { result: 'expired' };
+      }
+      if (entry.codeHash !== codeHash) {
+        entry.codeAttempts += 1;
+        saveFile(list);
+        return { result: 'wrong', triesLeft: MAX_TRIES - entry.codeAttempts };
+      }
+      Object.assign(entry, { confirmedAt: new Date().toISOString(), codeHash: null, codeExpiresAt: null });
+      saveFile(list);
+    }
+    return { result: 'ok', name: entry.name, position: spotIn(list, entry) };
   },
 };
 
@@ -154,15 +164,14 @@ const store = SUPABASE_URL && SUPABASE_KEY ? supabaseStore : fileStore;
 
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-function confirmEmail(name, link) {
+function codeEmail(name, code) {
   const first = name.split(' ')[0];
   const text = `Hi ${first},
 
-Tap the link below to confirm your spot on the Cobilt waitlist. You'll also lock in 2 months of Bolt AI free.
+Your Cobilt code is ${code}
 
-${link}
-
-This link expires in ${LINK_HOURS} hours. If you didn't sign up, ignore this email.
+Enter it on the site to confirm your spot on the waitlist and lock in 2 months of Bolt AI free.
+It expires in ${CODE_MINUTES} minutes. If you didn't sign up, ignore this email.
 
 Cobilt. Don't build alone.`;
 
@@ -171,23 +180,23 @@ Cobilt. Don't build alone.`;
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#100E33;border-radius:20px;padding:36px 32px;">
 <tr><td style="color:#F4F3FF;font-size:22px;font-weight:800;letter-spacing:-0.5px;padding-bottom:24px;">cobilt</td></tr>
-<tr><td style="color:#F4F3FF;font-size:26px;font-weight:800;line-height:1.2;letter-spacing:-0.6px;padding-bottom:12px;">Confirm your spot, ${escapeHtml(first)}.</td></tr>
-<tr><td style="color:#B9B7D6;font-size:16px;line-height:1.5;padding-bottom:28px;">One tap and you're on the list, with 2 months of Bolt AI free.</td></tr>
-<tr><td style="padding-bottom:28px;"><a href="${escapeHtml(link)}" style="display:inline-block;background:#4F46E5;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:16px 28px;border-radius:14px;">Confirm my spot</a></td></tr>
-<tr><td style="color:#8A88AD;font-size:13px;line-height:1.5;">This link expires in ${LINK_HOURS} hours. If you didn't sign up, ignore this email.</td></tr>
+<tr><td style="color:#F4F3FF;font-size:24px;font-weight:800;line-height:1.2;letter-spacing:-0.5px;padding-bottom:10px;">Here's your code, ${escapeHtml(first)}.</td></tr>
+<tr><td style="color:#B9B7D6;font-size:16px;line-height:1.5;padding-bottom:24px;">Enter it on the site to confirm your spot.</td></tr>
+<tr><td style="padding-bottom:24px;"><div style="display:inline-block;background:#07061A;border-radius:14px;padding:16px 24px;color:#F4F3FF;font-size:34px;font-weight:800;letter-spacing:10px;font-family:Menlo,Consolas,monospace;">${code}</div></td></tr>
+<tr><td style="color:#8A88AD;font-size:13px;line-height:1.5;">Expires in ${CODE_MINUTES} minutes. If you didn't sign up, ignore this email.</td></tr>
 </table>
 </td></tr></table></body></html>`;
 
-  return { subject: 'Confirm your spot on the Cobilt waitlist', text, html };
+  // Code first in the subject so phones can offer it for autofill.
+  return { subject: `${code} is your Cobilt code`, text, html };
 }
 
-async function sendConfirmEmail(to, name, token) {
-  const link = `${BASE_URL}/?confirm=${token}`;
+async function sendCodeEmail(to, name, code) {
   if (!RESEND_API_KEY) {
-    console.log(`[no RESEND_API_KEY] Confirm link for ${to}: ${link}`);
+    console.log(`[no RESEND_API_KEY] Code for ${to}: ${code}`);
     return;
   }
-  const { subject, text, html } = confirmEmail(name, link);
+  const { subject, text, html } = codeEmail(name, code);
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -228,7 +237,7 @@ function rateLimited(ip) {
   return recent.length > RATE_LIMIT.max;
 }
 
-// Shared checks for every API call; returns the parsed body or null after replying.
+// Shared checks for every API call; returns the parsed body, or null after replying.
 async function apiBody(req, res) {
   if (!String(req.headers['content-type']).startsWith('application/json')) {
     send(res, 415, { error: 'Send JSON.' }); return null;
@@ -253,27 +262,35 @@ async function joinWaitlist(req, res) {
   if (name.length < 2) return send(res, 400, { error: 'Enter your name.' });
   if (!COUNTRIES.has(location)) return send(res, 400, { error: 'Choose your country.' });
 
-  const token = newToken();
-  const result = await store.start({ email, name, location, tokenHash: hashToken(token) });
+  const code = newCode();
+  const result = await store.start({ email, name, location, codeHash: hashCode(email, code) });
 
   if (result.status === 'confirmed') return send(res, 200, { status: 'confirmed', position: result.position });
   if (result.sendEmail) {
-    try { await sendConfirmEmail(email, name, token); } catch (err) {
-      console.error('Confirm email failed:', err.message);
+    try { await sendCodeEmail(email, name, code); } catch (err) {
+      console.error('Code email failed:', err.message);
       return send(res, 502, { error: "We couldn't send the email. Try again in a minute." });
     }
   }
   send(res, 202, { status: 'pending' });
 }
 
-async function confirmWaitlist(req, res) {
+async function verifyWaitlist(req, res) {
   const body = await apiBody(req, res);
   if (!body) return;
 
-  const token = String(body.token || '');
-  const joined = TOKEN.test(token) ? await store.confirm(hashToken(token)) : null;
-  if (!joined) return send(res, 410, { error: 'This link expired. Join again to get a new one.' });
-  send(res, 200, joined);
+  const email = clean(body.email, 254).toLowerCase();
+  const code = clean(body.code, 6);
+  if (!EMAIL.test(email) || !CODE.test(code)) return send(res, 400, { error: 'Enter the 6-digit code.' });
+
+  const r = await store.verify(email, hashCode(email, code));
+  if (r.result === 'ok') return send(res, 200, { name: r.name, email, position: r.position });
+  if (r.result === 'wrong') {
+    return send(res, 400, { error: r.triesLeft > 0
+      ? `That code isn't right. ${r.triesLeft} ${r.triesLeft === 1 ? 'try' : 'tries'} left.`
+      : 'Too many wrong codes. Tap Resend code for a new one.' });
+  }
+  send(res, 410, { error: 'That code expired. Tap Resend code for a new one.' });
 }
 
 /* ---------- Static files ---------- */
@@ -301,7 +318,7 @@ function serveStatic(req, res) {
 
 const ROUTES = {
   '/api/waitlist': joinWaitlist,
-  '/api/waitlist/confirm': confirmWaitlist,
+  '/api/waitlist/verify': verifyWaitlist,
 };
 
 http.createServer((req, res) => {
@@ -318,5 +335,5 @@ http.createServer((req, res) => {
 }).listen(PORT, HOST, () => {
   console.log(`Cobilt website on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
   console.log(`Waitlist storage: ${store.label()}`);
-  console.log(`Confirm emails: ${RESEND_API_KEY ? `Resend, from ${EMAIL_FROM}` : 'not sent (links printed here)'}`);
+  console.log(`Code emails: ${RESEND_API_KEY ? `Resend, from ${EMAIL_FROM}` : 'not sent (codes printed here)'}`);
 });
