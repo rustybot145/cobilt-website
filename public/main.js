@@ -206,16 +206,10 @@
     input.focus();
   }
 
-  // Ask for a code. Returns true once we're waiting on one.
+  // Ask for a code (the server answers the same way for new and existing emails).
   async function requestCode() {
-    const result = await post('/api/waitlist', signup);
-    if (result.status === 'confirmed') {
-      rememberJoined({ name: signup.name, email: signup.email, position: result.position });
-      signup = null;
-      return false;
-    }
+    await post('/api/waitlist', signup);
     startResendTimer();
-    return true;
   }
 
   async function busy(task) {
@@ -247,7 +241,9 @@
 
   resendBtn.addEventListener('click', () => busy(async () => {
     codeInput.value = '';
-    if (await requestCode()) { msg.textContent = 'New code sent.'; codeInput.focus(); }
+    await requestCode();
+    msg.textContent = 'New code sent.';
+    codeInput.focus();
   }));
 
   // Digits only; submit as soon as all 6 are in (typed, pasted or autofilled)
@@ -281,11 +277,10 @@
         location: card.location.value,
       };
       return busy(async () => {
-        if (await requestCode()) {
-          dialog.querySelector('[data-check-email]').textContent = signup.email;
-          codeInput.value = '';
-          go(CODE);
-        }
+        await requestCode();
+        dialog.querySelector('[data-check-email]').textContent = signup.email;
+        codeInput.value = '';
+        go(CODE);
       });
     }
 

@@ -1,9 +1,11 @@
 // Cobilt website: serves /public and runs the waitlist with a 6-digit email code.
 //
-//   POST /api/waitlist         { email, name, location } → saves as pending, emails a code
-//   POST /api/waitlist/verify  { email, code }           → confirms, returns { name, position }
+//   POST /api/waitlist         { email, name, location } → emails a code (always answers { status: "pending" })
+//   POST /api/waitlist/verify  { email, code }           → confirms, returns { name, email, position }
 //
-// Storage: Supabase when SUPABASE_URL + SUPABASE_KEY are set (see supabase/waitlist.sql),
+// Nothing about a signup is revealed or changed without the right code.
+//
+// Storage: Supabase when SUPABASE_URL + SUPABASE_SECRET_KEY are set (see supabase/waitlist.sql),
 // otherwise data/waitlist.json for local testing.
 // Email: Resend when RESEND_API_KEY is set, otherwise the code is printed to the console.
 // No dependencies. Run: npm start   (settings in .env, see .env.example)
@@ -16,19 +18,26 @@ const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT) || 4321;
 const HOST = process.env.HOST || '127.0.0.1';
+const TRUST_PROXY = process.env.TRUST_PROXY === '1'; // set when running behind a proxy/host that sets X-Forwarded-For
 const PUBLIC = path.join(__dirname, 'public');
 const DATA = path.join(__dirname, 'data', 'waitlist.json');
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/(rest\/v1\/?)?$/, '');
-const SUPABASE_KEY = process.env.SUPABASE_KEY || ''; // publishable/anon key only, never the secret key
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || ''; // server-only; never sent to browsers
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'Cobilt <hello@getcobilt.app>';
+
+if (SUPABASE_SECRET_KEY.startsWith('sb_publishable_')) {
+  console.error('SUPABASE_SECRET_KEY is a publishable key. Use the secret key (sb_secret_…).');
+  process.exit(1);
+}
 
 const MAX_BODY = 10_000; // bytes
 const RATE_LIMIT = { max: 20, windowMs: 10 * 60 * 1000 }; // API calls per IP
 const CODE_MINUTES = 10; // codes expire after this
-const MAX_TRIES = 5; // wrong codes allowed before a new one is needed
-const RESEND_AFTER_MS = 60 * 1000; // at most one code email per address per minute
+const MAX_TRIES = 5; // wrong codes allowed per code
+const RESEND_AFTER_MS = 60 * 1000; // at most one code email per address per minute…
+const MAX_EMAILS_PER_DAY = 5; // …and this many per address per 24 hours
 const PENDING_DAYS = 7; // unconfirmed signups are deleted after this
 const PERK_MONTHS = 2; // free months of Bolt AI promised to confirmed members
 
@@ -45,6 +54,9 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Frame-Options': 'DENY',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains', // ignored on plain http (localhost)
   'Content-Security-Policy': [
     "default-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // inline style="--x:…" on scene bubbles
@@ -69,8 +81,8 @@ const hashCode = (email, code) => crypto.createHash('sha256').update(`${email}:$
 /* ---------- Storage: Supabase ---------- */
 
 async function rpc(fn, args) {
-  const headers = { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' };
-  if (!SUPABASE_KEY.startsWith('sb_')) headers.Authorization = `Bearer ${SUPABASE_KEY}`; // legacy anon JWT
+  const headers = { apikey: SUPABASE_SECRET_KEY, 'Content-Type': 'application/json' };
+  if (!SUPABASE_SECRET_KEY.startsWith('sb_')) headers.Authorization = `Bearer ${SUPABASE_SECRET_KEY}`; // legacy service_role JWT
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
     method: 'POST',
     headers,
@@ -85,7 +97,7 @@ const supabaseStore = {
   label: () => `Supabase (${new URL(SUPABASE_URL).host})`,
   async start({ email, name, location, codeHash }) {
     const [row] = await rpc('join_waitlist', { p_email: email, p_name: name, p_location: location, p_code_hash: codeHash });
-    return { status: row.status, position: row.spot == null ? null : Number(row.spot), sendEmail: row.send_email };
+    return row.status;
   },
   async verify(email, codeHash) {
     const [row] = await rpc('verify_waitlist', { p_email: email, p_code_hash: codeHash });
@@ -94,6 +106,7 @@ const supabaseStore = {
 };
 
 /* ---------- Storage: local file (testing) ---------- */
+// Same rules as the SQL functions in supabase/waitlist.sql.
 
 function loadFile() {
   try { return JSON.parse(fs.readFileSync(DATA, 'utf8')); } catch { return []; }
@@ -103,12 +116,13 @@ function loadFile() {
 function saveFile(list) {
   fs.mkdirSync(path.dirname(DATA), { recursive: true });
   const tmp = `${DATA}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
+  fs.writeFileSync(tmp, JSON.stringify(list, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, DATA);
 }
 
 // Spot in line among confirmed signups, ordered by when they confirmed.
 const spotIn = (list, entry) => list.filter((e) => e.confirmedAt && e.confirmedAt <= entry.confirmedAt).length;
+const iso = (ms) => new Date(ms).toISOString();
 
 const fileStore = {
   label: () => 'data/waitlist.json (local)',
@@ -117,48 +131,45 @@ const fileStore = {
     const list = loadFile().filter((e) => e.confirmedAt || now - Date.parse(e.joinedAt) < PENDING_DAYS * 864e5);
     let entry = list.find((e) => e.email === email);
 
-    if (entry?.confirmedAt) {
-      Object.assign(entry, { name, location, updatedAt: new Date(now).toISOString() });
-      saveFile(list);
-      return { status: 'confirmed', position: spotIn(list, entry), sendEmail: false };
-    }
-    if (entry && now - Date.parse(entry.emailSentAt) < RESEND_AFTER_MS) {
-      return { status: 'pending', position: null, sendEmail: false };
-    }
+    if (entry && now - Date.parse(entry.emailSentAt) < RESEND_AFTER_MS) return 'wait';
+
+    const newWindow = !entry || !entry.emailsWindowStart || now - Date.parse(entry.emailsWindowStart) >= 864e5;
+    if (entry && !newWindow && entry.emailsSentCount >= MAX_EMAILS_PER_DAY) return 'limited';
 
     if (!entry) {
-      entry = { email, perkMonths: PERK_MONTHS, joinedAt: new Date(now).toISOString(), confirmedAt: null };
+      entry = { email, name, location, perkMonths: PERK_MONTHS, joinedAt: iso(now), confirmedAt: null };
       list.push(entry);
+    } else if (!entry.confirmedAt) {
+      Object.assign(entry, { name, location }); // confirmed details can't be changed this way
     }
     Object.assign(entry, {
-      name, location, codeHash, codeAttempts: 0,
-      codeExpiresAt: new Date(now + CODE_MINUTES * 6e4).toISOString(),
-      emailSentAt: new Date(now).toISOString(),
+      codeHash, codeAttempts: 0,
+      codeExpiresAt: iso(now + CODE_MINUTES * 6e4),
+      emailSentAt: iso(now),
+      emailsSentCount: newWindow ? 1 : entry.emailsSentCount + 1,
+      emailsWindowStart: newWindow ? iso(now) : entry.emailsWindowStart,
     });
     saveFile(list);
-    return { status: 'pending', position: null, sendEmail: true };
+    return 'send';
   },
   async verify(email, codeHash) {
     const list = loadFile();
     const entry = list.find((e) => e.email === email);
-    if (!entry) return { result: 'expired' };
-    if (!entry.confirmedAt) {
-      if (!entry.codeHash || Date.parse(entry.codeExpiresAt) <= Date.now() || entry.codeAttempts >= MAX_TRIES) {
-        return { result: 'expired' };
-      }
-      if (entry.codeHash !== codeHash) {
-        entry.codeAttempts += 1;
-        saveFile(list);
-        return { result: 'wrong', triesLeft: MAX_TRIES - entry.codeAttempts };
-      }
-      Object.assign(entry, { confirmedAt: new Date().toISOString(), codeHash: null, codeExpiresAt: null });
-      saveFile(list);
+    if (!entry || !entry.codeHash || Date.parse(entry.codeExpiresAt) <= Date.now() || entry.codeAttempts >= MAX_TRIES) {
+      return { result: 'expired' };
     }
+    if (entry.codeHash !== codeHash) {
+      entry.codeAttempts += 1;
+      saveFile(list);
+      return { result: 'wrong', triesLeft: MAX_TRIES - entry.codeAttempts };
+    }
+    Object.assign(entry, { confirmedAt: entry.confirmedAt || iso(Date.now()), codeHash: null, codeExpiresAt: null, codeAttempts: 0 });
+    saveFile(list);
     return { result: 'ok', name: entry.name, position: spotIn(list, entry) };
   },
 };
 
-const store = SUPABASE_URL && SUPABASE_KEY ? supabaseStore : fileStore;
+const store = SUPABASE_URL && SUPABASE_SECRET_KEY ? supabaseStore : fileStore;
 
 /* ---------- Email ---------- */
 
@@ -209,10 +220,11 @@ async function sendCodeEmail(to, name, code) {
 /* ---------- Helpers ---------- */
 
 function send(res, status, body) {
-  res.writeHead(status, { ...SECURITY_HEADERS, 'Content-Type': 'application/json' });
+  res.writeHead(status, { ...SECURITY_HEADERS, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(body));
 }
 
+// Resolves to a plain object (anything else becomes {}), rejects when too large.
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let raw = '';
@@ -220,12 +232,24 @@ function readBody(req) {
       raw += chunk;
       if (raw.length > MAX_BODY) { reject(new Error('too large')); req.destroy(); }
     });
-    req.on('end', () => { try { resolve(JSON.parse(raw)); } catch { resolve({}); } });
+    req.on('end', () => {
+      let data = null;
+      try { data = JSON.parse(raw); } catch {}
+      resolve(data && typeof data === 'object' && !Array.isArray(data) ? data : {});
+    });
     req.on('error', reject);
   });
 }
 
-const clean = (v, max) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
+const clean = (v, max) => (typeof v === 'string' ? v : '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    if (forwarded) return forwarded;
+  }
+  return req.socket.remoteAddress;
+}
 
 const hits = new Map(); // ip -> timestamps of recent API calls
 function rateLimited(ip) {
@@ -242,7 +266,7 @@ async function apiBody(req, res) {
   if (!String(req.headers['content-type']).startsWith('application/json')) {
     send(res, 415, { error: 'Send JSON.' }); return null;
   }
-  if (rateLimited(req.socket.remoteAddress)) {
+  if (rateLimited(clientIp(req))) {
     send(res, 429, { error: 'Too many tries. Wait a few minutes and try again.' }); return null;
   }
   try { return await readBody(req); } catch { send(res, 413, { error: 'That was too long.' }); return null; }
@@ -263,15 +287,18 @@ async function joinWaitlist(req, res) {
   if (!COUNTRIES.has(location)) return send(res, 400, { error: 'Choose your country.' });
 
   const code = newCode();
-  const result = await store.start({ email, name, location, codeHash: hashCode(email, code) });
+  const status = await store.start({ email, name, location, codeHash: hashCode(email, code) });
 
-  if (result.status === 'confirmed') return send(res, 200, { status: 'confirmed', position: result.position });
-  if (result.sendEmail) {
+  if (status === 'limited') {
+    return send(res, 429, { error: 'Too many codes sent to this email today. Try again tomorrow.' });
+  }
+  if (status === 'send') {
     try { await sendCodeEmail(email, name, code); } catch (err) {
       console.error('Code email failed:', err.message);
       return send(res, 502, { error: "We couldn't send the email. Try again in a minute." });
     }
   }
+  // Same answer whether the email is new, pending or already confirmed.
   send(res, 202, { status: 'pending' });
 }
 
@@ -324,18 +351,24 @@ const ROUTES = {
   '/api/waitlist/verify': verifyWaitlist,
 };
 
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
   const route = req.method === 'POST' && ROUTES[req.url];
   if (route) {
     return route(req, res).catch((err) => {
       console.error(`${req.url} failed:`, err.message);
-      send(res, 500, { error: 'Something went wrong. Try again.' });
+      if (!res.headersSent) send(res, 500, { error: 'Something went wrong. Try again.' });
     });
   }
   if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res);
   res.writeHead(405, { ...SECURITY_HEADERS, Allow: 'GET, HEAD, POST' });
   res.end();
-}).listen(PORT, HOST, () => {
+});
+
+// Drop slow or stalled connections instead of holding them open.
+server.headersTimeout = 10_000;
+server.requestTimeout = 15_000;
+
+server.listen(PORT, HOST, () => {
   console.log(`Cobilt website on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
   console.log(`Waitlist storage: ${store.label()}`);
   console.log(`Code emails: ${RESEND_API_KEY ? `Resend, from ${EMAIL_FROM}` : 'not sent (codes printed here)'}`);
