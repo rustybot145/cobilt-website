@@ -295,12 +295,15 @@ async function verifyWaitlist(req, res) {
 
 /* ---------- Static files ---------- */
 
+// Clean page addresses
+const PAGES = { '/': 'index.html', '/joined': 'joined.html' };
+
 function serveStatic(req, res) {
   let urlPath;
   try { urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch {
     res.writeHead(400, SECURITY_HEADERS); return res.end('Bad request');
   }
-  const file = path.join(PUBLIC, urlPath === '/' ? 'index.html' : path.normalize(urlPath));
+  const file = path.join(PUBLIC, PAGES[urlPath] || path.normalize(urlPath));
   if (urlPath.includes('\0') || !file.startsWith(PUBLIC + path.sep)) {
     res.writeHead(403, SECURITY_HEADERS); return res.end('Forbidden');
   }

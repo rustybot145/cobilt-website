@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>You're in | Cobilt</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#07061A">
+  <link rel="icon" href="/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="joined-page">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="bA" gradientUnits="userSpaceOnUse" x1="52" y1="14" x2="30" y2="56"><stop offset="0" stop-color="#D4DBFF"/><stop offset="1" stop-color="#8C96F8"/></linearGradient>
+      <linearGradient id="bB" gradientUnits="userSpaceOnUse" x1="56" y1="14" x2="46" y2="40"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C9D1FF"/></linearGradient>
+      <linearGradient id="bC" gradientUnits="userSpaceOnUse" x1="60" y1="40" x2="42" y2="84"><stop offset="0" stop-color="#7471F7"/><stop offset="1" stop-color="#4338CA"/></linearGradient>
+      <linearGradient id="bD" gradientUnits="userSpaceOnUse" x1="66" y1="44" x2="44" y2="84"><stop offset="0" stop-color="#3B34B0"/><stop offset="1" stop-color="#211C66"/></linearGradient>
+    </defs>
+    <symbol id="bolt" viewBox="22 10 56 80">
+      <polygon points="58,14 26,56 47,56 53,40" fill="url(#bA)"/>
+      <polygon points="58,14 53,40 41,40" fill="url(#bB)"/>
+      <polygon points="53,40 74,40 40,86 47,56" fill="url(#bC)"/>
+      <polygon points="74,40 40,86 52,56" fill="url(#bD)"/>
+    </symbol>
+  </svg>
+
+  <div class="joined-bg" aria-hidden="true">
+    <img src="/scenes/crew.jpg" alt="" width="768" height="1376">
+  </div>
+
+  <header class="nav">
+    <a class="wordmark" href="/" aria-label="Cobilt home">
+      <svg class="wordmark-bolt" aria-hidden="true"><use href="#bolt"/></svg>
+      <span>cobilt</span>
+    </a>
+  </header>
+
+  <main class="joined-main">
+    <div class="joined-burst" aria-hidden="true">
+      <svg class="joined-bolt"><use href="#bolt"/></svg>
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </div>
+
+    <h1 class="joined-title" data-title>You're in.</h1>
+    <p class="joined-spot" data-spot>You're on the Cobilt waitlist.</p>
+
+    <ul class="perks" aria-label="What you get">
+      <li class="perk-card">
+        <span class="perk-icon" aria-hidden="true"><svg><use href="#bolt"/></svg></span>
+        <h2>2 months of Bolt AI</h2>
+        <p data-perk-email>Free when Cobilt launches.</p>
+      </li>
+      <li class="perk-card perk-mystery">
+        <span class="perk-icon" aria-hidden="true">?</span>
+        <h2>Mystery bonuses</h2>
+        <p>Still being decided. Worth the wait.</p>
+      </li>
+    </ul>
+
+    <div class="launch">
+      <span class="soon"><i aria-hidden="true"></i>Coming soon</span>
+      <p>No release date yet. We'll email you the moment it's ready.</p>
+    </div>
+
+    <div class="joined-actions">
+      <button class="btn btn-lg" type="button" data-share><span>Share Cobilt</span></button>
+      <a class="btn btn-lg btn-ghost" href="/">Back to the site</a>
+    </div>
+    <p class="share-msg" role="status" aria-live="polite"></p>
+  </main>
+
+  <script src="/joined.js"></script>
+</body>
+</html>

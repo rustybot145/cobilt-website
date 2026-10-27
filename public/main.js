@@ -87,7 +87,7 @@
     chat.classList.add('typed', 'answered');
   });
 
-  /* Waitlist quiz: email, name, country → 6-digit email code → joined */
+  /* Waitlist quiz: email, name, country → 6-digit email code → "You're in" page */
   const dialog = document.getElementById('join-dialog');
   const joinButtons = [...document.querySelectorAll('[data-join]')];
   const card = dialog.querySelector('.join-card');
@@ -102,7 +102,6 @@
   const STORE = 'cobilt-waitlist';
   const QUESTIONS = 3; // email, name, country
   const CODE = 3;
-  const DONE = 4;
   const RESEND_SECONDS = 60;
   let step = 0;
   let joined = null;
@@ -116,7 +115,7 @@
     (v) => /^\d{6}$/.test(v) || 'Enter the 6-digit code.',
   ];
 
-  const LABELS = { [QUESTIONS - 1]: 'Join the waitlist', [CODE]: 'Confirm', [DONE]: 'Done' };
+  const LABELS = { [QUESTIONS - 1]: 'Join the waitlist', [CODE]: 'Confirm' };
   const BUSY = { [QUESTIONS - 1]: 'Sending code…', [CODE]: 'Checking…' };
 
   function markJoined() {
@@ -139,7 +138,6 @@
     });
     if (step !== to) { void steps[to].offsetWidth; steps[to].classList.add(dir); }
     step = to;
-    dialog.classList.toggle('done', to === DONE);
     dots.forEach((d, i) => d.classList.toggle('on', i <= to));
     back.hidden = to === 0 || to >= CODE;
     next.firstElementChild.textContent = LABELS[to] || 'Continue';
@@ -148,19 +146,15 @@
     if (input) setTimeout(() => input.focus({ preventScroll: true }), 60);
   }
 
-  function showDone({ name, email, position }) {
-    const first = name.split(/\s+/)[0];
-    dialog.querySelector('[data-done-title]').textContent = `Joined. Welcome, ${first}.`;
-    dialog.querySelector('[data-done-body]').textContent = `You're #${position} on the list.`;
-    dialog.querySelector('[data-done-email]').textContent = email;
-    go(DONE);
-  }
-
+  // Save who joined (for the Joined buttons and the "You're in" page), then go there.
   function rememberJoined(data) {
     joined = data;
-    try { localStorage.setItem(STORE, JSON.stringify(joined)); } catch {}
+    const value = JSON.stringify(joined);
+    try { localStorage.setItem(STORE, value); } catch {
+      try { sessionStorage.setItem(STORE, value); } catch {}
+    }
     markJoined();
-    showDone(joined);
+    location.assign('/joined');
   }
 
   function startResendTimer() {
@@ -176,7 +170,8 @@
   }
 
   function open() {
-    if (joined) showDone(joined); else if (signup) go(CODE); else go(0);
+    if (joined) return location.assign('/joined');
+    if (signup) go(CODE); else go(0);
     if (!dialog.open) dialog.showModal();
   }
 
@@ -271,7 +266,6 @@
 
   card.addEventListener('submit', (e) => {
     e.preventDefault();
-    if (step === DONE) return close();
     if (next.hasAttribute('aria-busy')) return;
 
     const input = steps[step].querySelector('.step-input');

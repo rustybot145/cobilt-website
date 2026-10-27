@@ -27,6 +27,9 @@ Put these in `.env` (copy `.env.example`). Without the Supabase pair, signups go
 server.js          Static file server + POST /api/waitlist
 public/
   index.html       The page
+  joined.html      "You're in" page shown after the code is confirmed (/joined)
+  joined.js        Fills in name, spot and email; Share button
+  countries.json   Country list for the quiz (also used by the server to validate)
   styles.css       All styles (brand tokens at the top)
   main.js          Background film, scroll reveals, Bolt chat demo, waitlist quiz
   scenes/          Film artwork (alone.jpg, crew.jpg)
@@ -40,7 +43,7 @@ data/waitlist.json Local signups when Supabase isn't set (git-ignored)
 Signups are confirmed with a 6-digit email code, so nobody can join with someone else's address.
 
 1. `POST /api/waitlist` with `{ "email", "name", "location" }` (location is a country from `public/countries.json`) saves the person as pending and emails a code. Returns `{ status: "pending" }`, or `{ status: "confirmed", position }` if they already confirmed.
-2. `POST /api/waitlist/verify` with `{ "email", "code" }` confirms them and returns `{ name, email, position }`.
+2. `POST /api/waitlist/verify` with `{ "email", "code" }` confirms them and returns `{ name, email, position }`. The site then opens `/joined`: their spot, 2 free months of Bolt AI, mystery bonuses, and "coming soon".
 
 - Codes expire after 10 minutes and allow 5 wrong tries. Only a SHA-256 hash (salted with the email) is stored.
 - At most one code email per address per minute, and 20 API calls per IP every 10 minutes.
